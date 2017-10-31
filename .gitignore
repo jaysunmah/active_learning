@@ -1,0 +1,5 @@
+input_videos/
+input_frames/
+label_data/
+output_labels/
+*.jpg
