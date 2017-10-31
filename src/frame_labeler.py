@@ -1,3 +1,7 @@
+'''
+Simple opencv userinterface that will label images as "good" or "bad"
+'''
+
 import argparse
 from os.path import isdir, isfile, join
 from os import listdir
@@ -42,8 +46,5 @@ if __name__== '__main__':
         raise Exception("Directory does not exist: " + args.output_dir)
     if not isdir(args.input_dir):
         raise Exception("Directory does not exist: " + args.input_dir)
-
-    # os.mkdir(join(args.output_dir, 'good'))
-    # os.mkdir(join(args.output_dir, 'bad'))
 
     read_frames(args.input_dir, args.output_dir)

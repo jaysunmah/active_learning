@@ -3,3 +3,4 @@ input_frames/
 label_data/
 output_labels/
 *.jpg
+*.npy
