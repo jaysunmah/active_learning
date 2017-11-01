@@ -2,7 +2,8 @@
 Simple helper function that will format our data folder images so that
 they are of the format <CLASS>_<UID>.jpg
 
-Can be useful to keep things consistent later on
+Can be useful to keep things consistent later on, not really used in practice
+for now (feature and label files should already be aligned)
 '''
 
 import argparse
