@@ -29,10 +29,14 @@ data file structure is the following:
 
 '''
 
-def get_bottleneck_data(path):
+def get_bottleneck_data(path,
+    train_feature_file='weights/train_features.npy',
+    train_label_file='weights/train_labels.npy',
+    val_feature_file='weights/validation_features.npy',
+    val_label_file='weights/validation_labels.npy'):
     train_dir = join(path, "train")
     val_dir = join(path, "validation")
-    print("Obtaining bottleneck data")
+    print("[PREPROCESS DATA] Obtaining bottleneck data")
     model = VGG16(weights='imagenet', include_top=False)
 
     for (path, type) in [(train_dir,'train'), (val_dir,'validation')]:
@@ -49,7 +53,7 @@ def get_bottleneck_data(path):
                 i += 1
 
             #TODO PROCESS THESE IN BATCHES
-            print("Processing", classpath)
+            print("[PREPROCESS DATA] Processing", classpath)
             for img_path in [join(classpath, img) for img in listdir(classpath)]:
                 img = image.load_img(img_path, target_size=(224, 224))
                 x = image.img_to_array(img)
@@ -63,10 +67,14 @@ def get_bottleneck_data(path):
         bottleneck_features = np.array(bottleneck_features)
         bottleneck_labels = np.array(bottleneck_labels)
 
-        print('Saving',type,'features...')
-        np.save(type + "_features.npy", bottleneck_features)
-        np.save(type + "_labels.npy", bottleneck_labels)
-        print(type, 'features saved!')
+        print('[PREPROCESS DATA] Saving',type,'features...')
+        if type == 'train':
+            np.save(train_feature_file, bottleneck_features)
+            np.save(train_label_file, bottleneck_labels)
+        else:
+            np.save(val_feature_file, bottleneck_features)
+            np.save(val_label_file, bottleneck_labels)
+        print('[PREPROCESS DATA]', type, 'features saved!')
 
 
 if __name__== '__main__':

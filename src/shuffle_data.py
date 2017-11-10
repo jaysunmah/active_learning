@@ -24,16 +24,16 @@ def shuffle_dir(path, frequency):
     val_dir = join(path, "validation")
 
     try:
-        print("Clearing train directory...")
+        print("[SHUFFLE DATA] Clearing train directory...")
         shutil.rmtree(train_dir)
     except:
-        print("No train directory found")
+        print("[SHUFFLE DATA] No train directory found")
 
     try:
-        print("Clearing validation directory...")
+        print("[SHUFFLE DATA] Clearing validation directory...")
         shutil.rmtree(val_dir)
     except:
-        print("No validation directory found")
+        print("[SHUFFLE DATA] No validation directory found")
 
     os.mkdir(train_dir)
     os.mkdir(val_dir)
@@ -53,7 +53,7 @@ def shuffle_dir(path, frequency):
             else:
                 shutil.copy2(imagepath, join(val_save_dir, imagename))
 
-    print("Finished shuffling data")
+    print("[SHUFFLE DATA] Finished shuffling data")
 
 if __name__== '__main__':
     parser = argparse.ArgumentParser(description='Generate preprocessed bottleneck data')

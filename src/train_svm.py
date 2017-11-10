@@ -17,22 +17,25 @@ def v0_svm():
 '''
 Creates and fits an svm based on the training and validtion data
 '''
-def train_svm(train_feature_file, train_label_file, val_feature_file, val_label_file):
+def train_svm_impl(train_feature_file, train_label_file, val_feature_file, val_label_file, classes):
     model = v0_svm()
     train_features = np.load(train_feature_file)
     train_labels = np.load(train_label_file)
-    print("Fitting model")
+    print("[TRAIN SVM] Fitting model")
     model.fit(train_features, train_labels)
-    print("\nDone fitting model")
+    print("\n[TRAIN SVM] Done fitting model")
 
     val_features = np.load(val_feature_file)
     val_labels = np.load(val_label_file)
 
     pred = model.predict(val_features)
 
-    confusion = np.zeros((2,2))
+    confusion = np.zeros((classes,classes))
     for (i, guess) in enumerate(pred):
         confusion[val_labels[i]][guess] += 1
+
+    sum_rows = np.sum(confusion, axis=1)
+    confusion = confusion / sum_rows
 
     print(confusion)
 
@@ -48,4 +51,4 @@ if __name__== '__main__':
         help='Location of validation labels')
     args = parser.parse_args()
 
-    train_svm(args.train_feature, args.train_label, args.val_feature, args.val_label)
+    train_svm_impl(args.train_feature, args.train_label, args.val_feature, args.val_label)
