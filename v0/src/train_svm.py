@@ -29,6 +29,7 @@ def train_svm_impl(train_feature_file, train_label_file, val_feature_file, val_l
     val_labels = np.load(val_label_file)
 
     pred = model.predict(val_features)
+    print("predictions:", pred)
 
     confusion = np.zeros((classes,classes))
     for (i, guess) in enumerate(pred):

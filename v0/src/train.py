@@ -11,11 +11,6 @@ import train_svm
 import preprocess_data
 import shuffle_data
 
-
-
-
-
-
 if __name__== '__main__':
     parser = argparse.ArgumentParser(description='Shuffles data, generates bottleneck data, and trains svm')
     parser.add_argument('--data_dir', '-d', default='data/',

@@ -4,3 +4,5 @@ label_data/
 output_labels/
 *.jpg
 *.npy
+*.pyc
+*.gz
