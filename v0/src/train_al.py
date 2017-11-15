@@ -31,26 +31,33 @@ data_dir, as always, should be a directory with the minimum structure:
         .../
 This function will return list of tuples of (absolute_img_path, label)
 '''
+def get_image_class(data_dir):
+    data_dir = join(data_dir, "all")
+    image_dirs = sorted([f for f in listdir(data_dir) if isdir(join(data_dir, f))])
+    classes = {}
+    for key in range(len(image_dirs)):
+        classes[image_dirs[key]] = key
+    return classes
+
 def get_image_list(data_dir):
     # remove all .DS_Store files first
     nuke_current_dir()
+    classes = get_image_class(data_dir)
+    print('classes', classes)
     data_dir = join(data_dir, "all")
     image_dirs = [(join(data_dir, f),f) for f in listdir(data_dir) if isdir(join(data_dir, f))]
     images = []
-    classes = {}
-    class_index = 0
     for (img_path, label) in image_dirs:
-        if label not in classes:
-            classes[label] = class_index
-            class_index += 1
         images += [(join(img_path, f),classes[label]) for f in listdir(img_path)]
     random.shuffle(images)
-    return (images, classes)
+    return images
+
+
 
 '''
 This function will present an image, and return
 some "hardcoded" value for what class we manually
-assign it. 
+assign it.
 '''
 def present_image(path):
     frame = cv2.imread(path)
@@ -58,11 +65,11 @@ def present_image(path):
     while True:
         ch = cv2.waitKey()
         # this is hardcoded for SEA LION
-        if ch & 0xFF == ord('a'):
-            return 'otter'
+        if ch & 0xFF == ord('0'):
+            return 'bad'
         # this is hardcoded for DARTH VADER
-        if ch & 0xFF == ord('l'):
-            return 'darthvader'
+        if ch & 0xFF == ord('1'):
+            return 'good'
 
 '''
 Evaluates model in terms of performance with
@@ -122,7 +129,9 @@ def train_classifier(data_dir, reshuffle_data, iters, batch_size):
     step 1. get list of all images
             will shuffle images, but classes order should remain stable
     '''
-    (images,classes) = get_image_list(data_dir)
+    images = get_image_list(data_dir)
+    classes = get_image_class(data_dir)
+    print("CLASSES:", classes)
 
     '''
     step 2. process / retrieve all(?) feature data, if applicable
@@ -130,9 +139,9 @@ def train_classifier(data_dir, reshuffle_data, iters, batch_size):
             and some list of source of truths which we can use to lookup
             our "unlabeled" data when evaluating for accuracy
     '''
-    
+
     #check if we are missing files OR we want to override them
-    if not isfile(join(os.getcwd(), "weights/al_features.npy")) or reshuffle_data: 
+    if not isfile(join(os.getcwd(), "weights/al_features.npy")) or reshuffle_data:
         print("Creating bottleneck features")
         create_bottleneck_features(images)
 
@@ -196,7 +205,7 @@ if __name__=='__main__':
     parser.add_argument('--batch_size', '-b', default=10, type=int,
         help='How large we want our batch sizes to be')
 
- 
+
     args = parser.parse_args()
     reshuffle_flag = args.reshuffle_data == 1
 
