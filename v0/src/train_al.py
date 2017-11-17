@@ -2,6 +2,7 @@
 Secondary script to begin training active learning model
 '''
 
+import time
 import argparse
 import os
 from os.path import isdir, isfile, join
@@ -15,8 +16,11 @@ from keras.applications.vgg16 import preprocess_input
 import numpy as np
 
 from sklearn.svm import SVC, LinearSVC
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn import preprocessing
 import pickle as cPickle
+
+import aloss
 
 '''
 data_dir, as always, should be a directory with the minimum structure:
@@ -52,8 +56,6 @@ def get_image_list(data_dir):
     random.shuffle(images)
     return images
 
-
-
 '''
 This function will present an image, and return
 some "hardcoded" value for what class we manually
@@ -80,24 +82,50 @@ def evaluate_model(model, data, src_of_truth):
     labels = np.array([int(x) for (f, x) in src_of_truth])
     diffs = np.bitwise_xor(preds, labels)
     accuracy = 100 - (sum(diffs) / len(diffs) * 100)
-    print("Model Accuracy:", str(accuracy) + "%")
     return accuracy
 
 
 '''
 Centerpiece to our entire project. Should be very robust in the future,
 and have good sampling techniques
+Query needs to be of the form
+[(feature, image_path, src_truth_label), ...]
 '''
-def get_query(features, labels, batch_size):
-    # TODO: implement better selection heuristic
-    feature_slice = features[:batch_size]
-    label_slice = labels[:batch_size]
+def get_query(clf,unlabeled_data,labels,batch_size,query_method):
+    if query_method == 'random':
+        unlabeled_slice = unlabeled_data[:batch_size]
+        label_slice = labels[:batch_size]
 
-    result = []
-    for i, feature in enumerate(feature_slice):
-        result.append((feature, labels[i][0]))
+        result = []
+        for i, feature in enumerate(unlabeled_slice):
+            result.append((feature, labels[i][0], int(labels[i][1])))
 
-    return (result, features[batch_size:], labels[batch_size:])
+        return (result, unlabeled_data[batch_size:], labels[batch_size:])
+    elif query_method == 'aloss':
+        # compute our M matrix
+        n = len(unlabeled_data)
+        M = np.zeros((n,n))
+        uncertainties = aloss.instance_uncertainties(clf, unlabeled_data)
+        now = time.time()
+        print("Computing disparities, may take a while")
+        disparities = aloss.instance_disparities(unlabeled_data)
+        print(disparities.shape)
+        print("Finished computing disparities in", time.time() - now)
+        disparities = disparities / np.max(disparities)
+        for i in range(n):
+            for j in range(i,n):
+                if i == j:
+                    M[i][j] = uncertainties[i]
+                else:
+                    # diff = aloss.instance_disparity(unlabeled_data[i],unlabeled_data[j])
+                    M[i][j] = disparities[i][j]
+                    M[j][i] = disparities[i][j]
+        print(M)
+        #TODO So far, it will take ~ 30 seconds to even compute M :(
+        # check to see if this is faster with gpu acceleration
+        vectors = aloss.approx_solver(M, batch_size)
+        print(vectors)
+        return []
 
 '''
 we take in a massive list of images(shuffled), and we save their feature data
@@ -107,6 +135,8 @@ can take a long time to compute
 def create_bottleneck_features(images):
     model = VGG16(weights='imagenet', include_top=False)
     features = []
+    total = len(images)
+    curr = 0
     for (img_path, label) in images:
         img = image.load_img(img_path, target_size=(224, 224))
         x = image.img_to_array(img)
@@ -114,16 +144,20 @@ def create_bottleneck_features(images):
         x = preprocess_input(x)
         feature = model.predict(x)
         features.append(feature[0].ravel())
+        curr += 1
+        print("Progress:", curr / total * 100)
 
     print("Saving image data")
     np.save(join(os.getcwd(), "weights/al_features.npy"), np.array(features))
     np.save(join(os.getcwd(), "weights/al_labels.npy"), images)
 
-def train_classifier(data_dir, reshuffle_data, iters, batch_size):
+def train_classifier(data_dir, reshuffle_data, iters, batch_size, query_method):
     '''
     step 0. initialize our model
     '''
-    clf = LinearSVC(multi_class="ovr", loss='hinge', verbose=True, max_iter=250, C=10**5)
+    clf = LinearSVC(multi_class="ovr", loss='hinge', verbose=True, max_iter=250)
+    clf = CalibratedClassifierCV(clf)
+    # clf = SVC(probability=True, verbose=True)
 
     '''
     step 1. get list of all images
@@ -173,10 +207,17 @@ def train_classifier(data_dir, reshuffle_data, iters, batch_size):
         # on "some" heuristic (random for now), it will return the
         # the query, as well as the new unlabeled dataset and src of truth
         # query MUST have some image path zipped to end of tuple
-        (query,unlabeled_data,src_of_truth) = get_query(unlabeled_data, src_of_truth, batch_size)
+        if len(my_data) == 0:
+            (query,unlabeled_data,src_of_truth) = get_query(clf,unlabeled_data,src_of_truth,batch_size,"random")
+        else:
+            (query,unlabeled_data,src_of_truth) = get_query(clf,unlabeled_data,src_of_truth,batch_size,query_method)
+            print("returning here")
+            return
+
         # manually label our current data
-        for (features, img_path) in query:
-            manual_label = classes[present_image(img_path)]
+        for (features, img_path, true_label) in query:
+            # manual_label = classes[present_image(img_path)]
+            manual_label = true_label
             my_data.append(features)
             my_labels.append(manual_label)
 
@@ -186,6 +227,7 @@ def train_classifier(data_dir, reshuffle_data, iters, batch_size):
         # Evaluate periodic accuracy of our svm model with the rest of our
         # unlabeled data
         acc = evaluate_model(clf, unlabeled_data, src_of_truth)
+        print("\n[RESULTS]: Iteration=" + str(i) + " Model Accuracy:", str(acc) + "%")
         accuracies.append(acc)
 
     #TODO plot our accuracies with respect to its index
@@ -193,6 +235,7 @@ def train_classifier(data_dir, reshuffle_data, iters, batch_size):
     '''
     step 4: return / save our model!
     '''
+    print("[RESULTS] Learning curve:",accuracies)
 
     #TODO Not yet implemented
 
@@ -204,9 +247,10 @@ if __name__=='__main__':
         help='How many iterations we want to run')
     parser.add_argument('--batch_size', '-b', default=10, type=int,
         help='How large we want our batch sizes to be')
-
+    parser.add_argument('--query_method', '-q', default='random',
+        help='Query Selection')
 
     args = parser.parse_args()
     reshuffle_flag = args.reshuffle_data == 1
 
-    train_classifier(join(os.getcwd(), "data"), reshuffle_flag, args.iterations, args.batch_size)
+    train_classifier(join(os.getcwd(), "data"), reshuffle_flag, args.iterations, args.batch_size, args.query_method)

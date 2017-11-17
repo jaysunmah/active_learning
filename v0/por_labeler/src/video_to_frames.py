@@ -70,7 +70,7 @@ if __name__== '__main__':
         help='Folder destination of results. Make sure this folder is empty before running the script')
     parser.add_argument('--input_dir', '-i', required = True,
         help='Input folder path. Directory should contain all video files')
-    parser.add_argument('--frame_buffer', default=20, type=int,
+    parser.add_argument('--frame_buffer', '-f', default=20, type=int,
         help='Number of frames to jump')
     args = parser.parse_args()
 
