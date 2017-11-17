@@ -2,73 +2,17 @@
 Implementation of Optimal Subset Selection for Active Learning
 '''
 import numpy as np
-import copy
-import functools
 import time
 import random
 from scipy.spatial.distance import cdist
 
-# problem statement: given some n x n matrix M and some limit k,
-# return a vector (n x 1) of at most k 1's and n - k 0's such that
-# e^T M e is maximum
-# currently does not work efficiently :(
-def solver(M, n, i, j, e):
-    if j == k:
-        ve = np.array(e)
-        vi = np.matmul(np.matmul(ve.transpose(), M), ve)
-        return (vi, copy.deepcopy(e))
 
-    # we have reached our limit, and j hasn't been filled up
-    if i >= n:
-        return (None, None)
-
-    tempE = copy.deepcopy(e)
-    tempE[i] = 1
-    # second call, we add our current elem into vector set.
-    (m2, e2) = solver(M, n, i + 1, j + 1, copy.deepcopy(tempE))
-    # first call, we do not add our current elem into vector set.
-    (m1, e1) = solver(M, n, i + 1, j, copy.deepcopy(e))
-
-    if m1 == None and m2 == None:
-        return (None, None)
-
-    ve = np.array(e2)
-    vi = np.matmul(np.matmul(ve.transpose(), M), ve)
-    if m2 == None or (m1 != None and m1 > m2 + vi):
-        return (m1, e1)
-    return (m2 + vi, e2)
-
-def approx_solver(M, k):
-    n = len(M)
-    best = 0
-    best_vec = None
-    iters = n ** 2
-    for _ in range(iters):
-        e = [0 for _ in range(n)]
-        i = 0
-        numbers = set()
-        while i < k:
-            num = random.randint(0, n-1)
-            if num not in numbers:
-                numbers.add(num)
-                i += 1
-        for num in numbers:
-            e[num] = 1
-        score = compute_wei(e, M)
-        if score > best:
-            best_vec = e
-            best = score
-    return best_vec
-
-def find_max_e(M, k):
-    n = len(M)
-    memo = [[None for _ in range(k + 1)] for _ in range(n + 1) ]
-    e = [0 for _ in range(n)]
-    # i = current elem we are on
-    # j = current # of elems we've added
-    # e = current vector we are modifying
-    (best, e) = solver(M, n, 0, 0, e)
-    return e
+def greedy_solver(M, k):
+    sums = np.sum(M, axis=1)
+    zipped_sums = list(enumerate(sums))
+    sorted_sums = sorted(zipped_sums, key=lambda x: x[1], reverse=True)
+    indices = [i for (i, d) in sorted_sums[:k]]
+    return indices
 
 #just to make sure our thing is good, we run brute force sol
 def brute_force_solver(M, k):

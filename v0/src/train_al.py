@@ -101,6 +101,20 @@ def get_query(clf,unlabeled_data,labels,batch_size,query_method):
             result.append((feature, labels[i][0], int(labels[i][1])))
 
         return (result, unlabeled_data[batch_size:], labels[batch_size:])
+    elif query_method == 'uncertainty':
+        uncertainties = aloss.instance_uncertainties(clf, unlabeled_data)
+        zipped = list(enumerate(uncertainties))
+        sorted_uncertanties = sorted(zipped,key=lambda x: x[1], reverse=True)
+        query_indices = [i for (i, d) in sorted_uncertanties[:batch_size]]
+        result = []
+
+        for i in query_indices:
+            result.append((unlabeled_data[i], labels[i][0], int(labels[i][1])))
+
+        queried_indices = set(query_indices)
+        unlabeled_data = np.array([d for (i,d) in enumerate(unlabeled_data.tolist()) if i not in queried_indices])
+        labels = np.array([d for (i,d) in enumerate(labels.tolist()) if i not in queried_indices])
+        return (result, unlabeled_data, labels)
     elif query_method == 'aloss':
         # compute our M matrix
         n = len(unlabeled_data)
@@ -109,7 +123,6 @@ def get_query(clf,unlabeled_data,labels,batch_size,query_method):
         now = time.time()
         print("Computing disparities, may take a while")
         disparities = aloss.instance_disparities(unlabeled_data)
-        print(disparities.shape)
         print("Finished computing disparities in", time.time() - now)
         disparities = disparities / np.max(disparities)
         for i in range(n):
@@ -120,12 +133,17 @@ def get_query(clf,unlabeled_data,labels,batch_size,query_method):
                     # diff = aloss.instance_disparity(unlabeled_data[i],unlabeled_data[j])
                     M[i][j] = disparities[i][j]
                     M[j][i] = disparities[i][j]
-        print(M)
-        #TODO So far, it will take ~ 30 seconds to even compute M :(
-        # check to see if this is faster with gpu acceleration
-        vectors = aloss.approx_solver(M, batch_size)
-        print(vectors)
-        return []
+
+        query_indices = aloss.greedy_solver(M, batch_size)
+
+        result = []
+        for i in query_indices:
+            result.append((unlabeled_data[i], labels[i][0], int(labels[i][1])))
+
+        queried_indices = set(query_indices)
+        unlabeled_data = np.array([d for (i,d) in enumerate(unlabeled_data.tolist()) if i not in queried_indices])
+        labels = np.array([d for (i,d) in enumerate(labels.tolist()) if i not in queried_indices])
+        return (result, unlabeled_data, labels)
 
 '''
 we take in a massive list of images(shuffled), and we save their feature data
@@ -211,8 +229,6 @@ def train_classifier(data_dir, reshuffle_data, iters, batch_size, query_method):
             (query,unlabeled_data,src_of_truth) = get_query(clf,unlabeled_data,src_of_truth,batch_size,"random")
         else:
             (query,unlabeled_data,src_of_truth) = get_query(clf,unlabeled_data,src_of_truth,batch_size,query_method)
-            print("returning here")
-            return
 
         # manually label our current data
         for (features, img_path, true_label) in query:
@@ -236,6 +252,13 @@ def train_classifier(data_dir, reshuffle_data, iters, batch_size, query_method):
     step 4: return / save our model!
     '''
     print("[RESULTS] Learning curve:",accuracies)
+    import matplotlib.pyplot as plt
+    xaxis = [i*batch_size for i in range(1, iters+1)]
+    plt.plot(xaxis, accuracies)
+    plt.title(query_method)
+    plt.ylabel('Validation Accuracy')
+    plt.xlabel('Training samples')
+    plt.show()
 
     #TODO Not yet implemented
 
