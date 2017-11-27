@@ -1,11 +1,11 @@
 '''
 Implementation of Optimal Subset Selection for Active Learning
+Currently still wip, our greedy solver doesn't seem to be working effectively
 '''
 import numpy as np
 import time
 import random
 from scipy.spatial.distance import cdist
-
 
 def greedy_solver(M, k):
     sums = np.sum(M, axis=1)
@@ -36,8 +36,6 @@ def brute_force_solver(M, k):
             for arr in res2:
                 res.append(arr + [1])
         return res
-        # for arr in get_vectors(x-1, n-1):
-            # res.append(arr)
     vectors = get_vectors(k, len(M))
     maxIndex = None
     maxVal = 0
@@ -49,55 +47,12 @@ def brute_force_solver(M, k):
             maxVal = vi
     return vectors[maxIndex]
 
-# M = [
-#     [9,0,0,0,0],
-#     [0,0,0,0,0],
-#     [0,0,9,0,0],
-#     [0,0,0,8,0],
-#     [0,0,0,0,0],
-# ]
-
-# size = 20
-# M = np.random.rand(size, size)
-#
 def compute_wei(e, M):
     ve = np.array(e)
     return np.matmul(np.matmul(ve.transpose(), M), ve)
-#
-# k = 5
-
-# now = time.time()
-# wei2 = find_max_e(M, k)
-# wei2 = approx_solver(M, k)
-# print("my sol took", time.time() - now)
-# now = time.time()
-# wei1 = brute_force_solver(M, k)
-# print("brute force took", time.time() - now)
-# print("actual sol\t", compute_wei(wei1, M), wei1)
-# print("my sol\t\t", compute_wei(wei2, M), wei2)
-# a = np.array([1,0,1,0,0])
-# b = np.matmul(a.transpose(), M)
-# d = np.matmul(b, a)
-# print(d)
 
 def instance_disparities(d):
     return cdist(d, d, 'euclidean')
-    # n = len(d)
-    # print("wei-1", n, d)
-    # return
-    # #m1 has repeated columns
-    # m1 = np.tile(d, (n,1))
-    # print("wei0")
-    # #m2 has repeated rows
-    # m2 = np.tile(np.array([d]).transpose(), (1,n))
-    # print("wei1")
-    # diffs = m1 - m2
-    # print("wei2")
-    # disparity = diffs * diffs
-    # print("wei3")
-    # return disparity / np.max(disparity)
-
-
 
 # returns euclidean distance between the two feature vectors
 def instance_disparity(f1, f2):
@@ -110,8 +65,3 @@ def instance_uncertainties(clf, features):
     probs = np.min(clf.predict_proba(features), axis=1)
     # probs = min(clf.predict_proba([f])[0])
     return probs
-
-vec1 = [1,2,3]
-vec2 = [1,2,13]
-
-print(instance_disparity(np.array(vec1), np.array(vec2)))

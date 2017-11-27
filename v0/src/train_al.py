@@ -1,5 +1,12 @@
 '''
 Secondary script to begin training active learning model
+
+Updates as of 11/25/17:
+- Look into revamping how we are evaluating our model? The reason for this
+is because we might be labeling things as "bad" when we originally labled them
+as "good", but in reality they're pertty bad. (or vice versa).
+- Display 40 random images deemed to be "good", and 40 random images deemed to be
+"bad" after we are done with our entire net. Let's see qualitatively how we perform.
 '''
 
 import time
@@ -21,6 +28,7 @@ from sklearn import preprocessing
 import pickle as cPickle
 
 import aloss
+import al_selection
 
 '''
 data_dir, as always, should be a directory with the minimum structure:
@@ -93,57 +101,15 @@ Query needs to be of the form
 '''
 def get_query(clf,unlabeled_data,labels,batch_size,query_method):
     if query_method == 'random':
-        unlabeled_slice = unlabeled_data[:batch_size]
-        label_slice = labels[:batch_size]
-
-        result = []
-        for i, feature in enumerate(unlabeled_slice):
-            result.append((feature, labels[i][0], int(labels[i][1])))
-
-        return (result, unlabeled_data[batch_size:], labels[batch_size:])
+        return al_selection.random_select(clf,unlabeled_data,labels,batch_size)
     elif query_method == 'uncertainty':
-        uncertainties = aloss.instance_uncertainties(clf, unlabeled_data)
-        zipped = list(enumerate(uncertainties))
-        sorted_uncertanties = sorted(zipped,key=lambda x: x[1], reverse=True)
-        query_indices = [i for (i, d) in sorted_uncertanties[:batch_size]]
-        result = []
-
-        for i in query_indices:
-            result.append((unlabeled_data[i], labels[i][0], int(labels[i][1])))
-
-        queried_indices = set(query_indices)
-        unlabeled_data = np.array([d for (i,d) in enumerate(unlabeled_data.tolist()) if i not in queried_indices])
-        labels = np.array([d for (i,d) in enumerate(labels.tolist()) if i not in queried_indices])
-        return (result, unlabeled_data, labels)
+        return al_selection.uncertainty(clf,unlabeled_data,labels,batch_size)
     elif query_method == 'aloss':
-        # compute our M matrix
-        n = len(unlabeled_data)
-        M = np.zeros((n,n))
-        uncertainties = aloss.instance_uncertainties(clf, unlabeled_data)
-        now = time.time()
-        print("Computing disparities, may take a while")
-        disparities = aloss.instance_disparities(unlabeled_data)
-        print("Finished computing disparities in", time.time() - now)
-        disparities = disparities / np.max(disparities)
-        for i in range(n):
-            for j in range(i,n):
-                if i == j:
-                    M[i][j] = uncertainties[i]
-                else:
-                    # diff = aloss.instance_disparity(unlabeled_data[i],unlabeled_data[j])
-                    M[i][j] = disparities[i][j]
-                    M[j][i] = disparities[i][j]
-
-        query_indices = aloss.greedy_solver(M, batch_size)
-
-        result = []
-        for i in query_indices:
-            result.append((unlabeled_data[i], labels[i][0], int(labels[i][1])))
-
-        queried_indices = set(query_indices)
-        unlabeled_data = np.array([d for (i,d) in enumerate(unlabeled_data.tolist()) if i not in queried_indices])
-        labels = np.array([d for (i,d) in enumerate(labels.tolist()) if i not in queried_indices])
-        return (result, unlabeled_data, labels)
+        return al_selection.aloss_select(clf,unlabeled_data,labels,batch_size)
+    elif query_method == 'entropy':
+        return al_selection.entropy(clf,unlabeled_data,labels,batch_size)
+    elif query_method == 'ceal':
+        return al_selection.ceal(clf,unlabeled_data,labels,batch_size)
 
 '''
 we take in a massive list of images(shuffled), and we save their feature data
@@ -183,7 +149,7 @@ def train_classifier(data_dir, reshuffle_data, iters, batch_size, query_method):
     '''
     images = get_image_list(data_dir)
     classes = get_image_class(data_dir)
-    print("CLASSES:", classes)
+    print("[TRAIN AL] CLASSES:", classes)
 
     '''
     step 2. process / retrieve all(?) feature data, if applicable
@@ -194,7 +160,7 @@ def train_classifier(data_dir, reshuffle_data, iters, batch_size, query_method):
 
     #check if we are missing files OR we want to override them
     if not isfile(join(os.getcwd(), "weights/al_features.npy")) or reshuffle_data:
-        print("Creating bottleneck features")
+        print("[TRAIN AL] Creating bottleneck features")
         create_bottleneck_features(images)
 
     # bottleneck features is array of processed images
@@ -220,7 +186,7 @@ def train_classifier(data_dir, reshuffle_data, iters, batch_size, query_method):
     my_labels = []
     accuracies = []
     for i in range(iters):
-        print("Querying on iteration:", i)
+        print("[TRAIN AL] Querying on iteration:", i)
         # get_query_data will look through these features, and based
         # on "some" heuristic (random for now), it will return the
         # the query, as well as the new unlabeled dataset and src of truth
@@ -229,6 +195,12 @@ def train_classifier(data_dir, reshuffle_data, iters, batch_size, query_method):
             (query,unlabeled_data,src_of_truth) = get_query(clf,unlabeled_data,src_of_truth,batch_size,"random")
         else:
             (query,unlabeled_data,src_of_truth) = get_query(clf,unlabeled_data,src_of_truth,batch_size,query_method)
+            if query_method == 'ceal':
+                (pseudo_labels,unlabeled_data,src_of_truth) = al_selection.get_pseudo_labels(clf,unlabeled_data,src_of_truth,batch_size,i, 0.02,0.99)
+                for (f, c) in pseudo_labels:
+                    my_data.append(f)
+                    my_labels.append(c)
+                print("[CEAL] data size:", len(my_labels))
 
         # manually label our current data
         for (features, img_path, true_label) in query:
@@ -246,21 +218,14 @@ def train_classifier(data_dir, reshuffle_data, iters, batch_size, query_method):
         print("\n[RESULTS]: Iteration=" + str(i) + " Model Accuracy:", str(acc) + "%")
         accuracies.append(acc)
 
-    #TODO plot our accuracies with respect to its index
-
     '''
     step 4: return / save our model!
+    TODO: save our svm model in an output folder, as well as a confusion
+    matrix visualization (show the images that we guessed wrong for each
+    class.)
     '''
-    print("[RESULTS] Learning curve:",accuracies)
-    import matplotlib.pyplot as plt
-    xaxis = [i*batch_size for i in range(1, iters+1)]
-    plt.plot(xaxis, accuracies)
-    plt.title(query_method)
-    plt.ylabel('Validation Accuracy')
-    plt.xlabel('Training samples')
-    plt.show()
+    return accuracies
 
-    #TODO Not yet implemented
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Main script for developing active learning model')
