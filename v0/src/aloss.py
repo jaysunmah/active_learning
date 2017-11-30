@@ -6,37 +6,62 @@ import numpy as np
 import time
 import random
 from scipy.spatial.distance import cdist
+from sklearn.metrics.pairwise import euclidean_distances
+import itertools
 
+'''
+Revised version, using algorithm given by Uran.
+We will pick our 0th element, and select the element with the highest
+value in that row and go from there.
+'''
 def greedy_solver(M, k):
-    sums = np.sum(M, axis=1)
-    zipped_sums = list(enumerate(sums))
-    sorted_sums = sorted(zipped_sums, key=lambda x: x[1], reverse=True)
-    indices = [i for (i, d) in sorted_sums[:k]]
+    indices = [0]
+    for _ in range(k - 1):
+        # we get the row of the element we just picked
+        row = M[indices[-1]]
+        maxI = np.argmax(row, axis=0)
+        while maxI in indices:
+            row[maxI] = -1
+            maxI = np.argmax(row, axis=0)
+        indices.append(maxI)
+
+    # sums = np.sum(M, axis=1)
+    # zipped_sums = list(enumerate(sums))
+    # sorted_sums = sorted(zipped_sums, key=lambda x: x[1], reverse=True)
+    # indices = [i for (i, d) in sorted_sums[:k]]
     return indices
+
+# given input x, generate all arrays with x 1's of length n
+# def get_vectors(x, n):
+#     if x == 0: return [[0 for _ in range(n)]]
+#     if n == 0: return None
+#     res = []
+#     #res1 will return all arrays with x 1's of length n - 1.
+#     #we append 0's to these puppies
+#     res1 = get_vectors(x, n-1)
+#     #res2 will return all arrays with x-1 1's of length n - 1.
+#     #we append 1's to these kitties
+#     res2 = get_vectors(x-1, n-1)
+#     if res1 == None and res2 == None:
+#         return None
+#     if res1 != None:
+#         for arr in res1:
+#             res.append(arr + [0])
+#     if res2 != None:
+#         for arr in res2:
+#             res.append(arr + [1])
+#     return res
+
+def get_vectors(k, n):
+    return [x for x in itertools.combinations(range(n),k)]
+
 
 #just to make sure our thing is good, we run brute force sol
 def brute_force_solver(M, k):
-    # given input x, generate all arrays with x 1's of length n
-    def get_vectors(x, n):
-        if x == 0: return [[0 for _ in range(n)]]
-        if n == 0: return None
-        res = []
-        #res1 will return all arrays with x 1's of length n - 1.
-        #we append 0's to these puppies
-        res1 = get_vectors(x, n-1)
-        #res2 will return all arrays with x-1 1's of length n - 1.
-        #we append 1's to these kitties
-        res2 = get_vectors(x-1, n-1)
-        if res1 == None and res2 == None:
-            return None
-        if res1 != None:
-            for arr in res1:
-                res.append(arr + [0])
-        if res2 != None:
-            for arr in res2:
-                res.append(arr + [1])
-        return res
+    print("getting vectors")
     vectors = get_vectors(k, len(M))
+    print("done")
+    return
     maxIndex = None
     maxVal = 0
     for i, e in enumerate(vectors):
@@ -52,7 +77,8 @@ def compute_wei(e, M):
     return np.matmul(np.matmul(ve.transpose(), M), ve)
 
 def instance_disparities(d):
-    return cdist(d, d, 'euclidean')
+    return euclidean_distances(d)
+    # return cdist(d, d, 'euclidean')
 
 # returns euclidean distance between the two feature vectors
 def instance_disparity(f1, f2):

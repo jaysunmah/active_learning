@@ -17,9 +17,6 @@ from os import listdir
 from remove_DS_Store import *
 import random
 import cv2
-from keras.applications.vgg16 import VGG16
-from keras.preprocessing import image
-from keras.applications.vgg16 import preprocess_input
 import numpy as np
 
 from sklearn.svm import SVC, LinearSVC
@@ -55,7 +52,6 @@ def get_image_list(data_dir):
     # remove all .DS_Store files first
     nuke_current_dir()
     classes = get_image_class(data_dir)
-    print('classes', classes)
     data_dir = join(data_dir, "all")
     image_dirs = [(join(data_dir, f),f) for f in listdir(data_dir) if isdir(join(data_dir, f))]
     images = []
@@ -100,6 +96,8 @@ Query needs to be of the form
 [(feature, image_path, src_truth_label), ...]
 '''
 def get_query(clf,unlabeled_data,labels,batch_size,query_method):
+    if query_method == "init":
+        return al_selection.init_select(clf,unlabeled_data,labels,batch_size)
     if query_method == 'random':
         return al_selection.random_select(clf,unlabeled_data,labels,batch_size)
     elif query_method == 'uncertainty':
@@ -109,7 +107,8 @@ def get_query(clf,unlabeled_data,labels,batch_size,query_method):
     elif query_method == 'entropy':
         return al_selection.entropy(clf,unlabeled_data,labels,batch_size)
     elif query_method == 'ceal':
-        return al_selection.ceal(clf,unlabeled_data,labels,batch_size)
+        # return al_selection.ceal(clf,unlabeled_data,labels,batch_size)
+        return al_selection.uncertainty(clf,unlabeled_data,labels,batch_size)
 
 '''
 we take in a massive list of images(shuffled), and we save their feature data
@@ -117,12 +116,18 @@ Future improvement of this should be to display some progress bar, as this
 can take a long time to compute
 '''
 def create_bottleneck_features(images):
+
+    from keras.applications.vgg16 import VGG16
+    from keras.preprocessing import image
+    from keras.applications.vgg16 import preprocess_input
+
     model = VGG16(weights='imagenet', include_top=False)
     features = []
     total = len(images)
     curr = 0
     for (img_path, label) in images:
-        img = image.load_img(img_path, target_size=(224, 224))
+        # img = image.load_img(img_path, target_size=(224, 224))
+        img = image.load_img(img_path, target_size=(32, 32))
         x = image.img_to_array(img)
         x = np.expand_dims(x, axis=0)
         x = preprocess_input(x)
@@ -135,11 +140,11 @@ def create_bottleneck_features(images):
     np.save(join(os.getcwd(), "weights/al_features.npy"), np.array(features))
     np.save(join(os.getcwd(), "weights/al_labels.npy"), images)
 
-def train_classifier(data_dir, reshuffle_data, iters, batch_size, query_method):
+def train_classifier(data_dir, reshuffle_data, iters, batch_size, query_method, verbose=True):
     '''
     step 0. initialize our model
     '''
-    clf = LinearSVC(multi_class="ovr", loss='hinge', verbose=True, max_iter=250)
+    clf = LinearSVC(multi_class="ovr", loss='hinge', verbose=verbose)
     clf = CalibratedClassifierCV(clf)
     # clf = SVC(probability=True, verbose=True)
 
@@ -149,7 +154,7 @@ def train_classifier(data_dir, reshuffle_data, iters, batch_size, query_method):
     '''
     images = get_image_list(data_dir)
     classes = get_image_class(data_dir)
-    print("[TRAIN AL] CLASSES:", classes)
+    if verbose: print("[TRAIN AL] CLASSES:", classes)
 
     '''
     step 2. process / retrieve all(?) feature data, if applicable
@@ -160,7 +165,7 @@ def train_classifier(data_dir, reshuffle_data, iters, batch_size, query_method):
 
     #check if we are missing files OR we want to override them
     if not isfile(join(os.getcwd(), "weights/al_features.npy")) or reshuffle_data:
-        print("[TRAIN AL] Creating bottleneck features")
+        if verbose: print("[TRAIN AL] Creating bottleneck features")
         create_bottleneck_features(images)
 
     # bottleneck features is array of processed images
@@ -186,21 +191,23 @@ def train_classifier(data_dir, reshuffle_data, iters, batch_size, query_method):
     my_labels = []
     accuracies = []
     for i in range(iters):
-        print("[TRAIN AL] Querying on iteration:", i)
+        if verbose: print("[TRAIN AL] Querying on iteration:", i)
         # get_query_data will look through these features, and based
         # on "some" heuristic (random for now), it will return the
         # the query, as well as the new unlabeled dataset and src of truth
         # query MUST have some image path zipped to end of tuple
         if len(my_data) == 0:
-            (query,unlabeled_data,src_of_truth) = get_query(clf,unlabeled_data,src_of_truth,batch_size,"random")
+            (query,unlabeled_data,src_of_truth) = get_query(clf,unlabeled_data,src_of_truth,batch_size,"init")
         else:
             (query,unlabeled_data,src_of_truth) = get_query(clf,unlabeled_data,src_of_truth,batch_size,query_method)
             if query_method == 'ceal':
+                # (pseudo_labels,unlabeled_data,src_of_truth) = al_selection.get_pseudo_labels(clf,unlabeled_data,src_of_truth,batch_size,i, 0.001,0.999)
                 (pseudo_labels,unlabeled_data,src_of_truth) = al_selection.get_pseudo_labels(clf,unlabeled_data,src_of_truth,batch_size,i, 0.02,0.99)
+                if verbose: print("[CEAL] adding", len(pseudo_labels), "data points")
                 for (f, c) in pseudo_labels:
                     my_data.append(f)
                     my_labels.append(c)
-                print("[CEAL] data size:", len(my_labels))
+                if verbose: print("[CEAL] data size:", len(my_labels))
 
         # manually label our current data
         for (features, img_path, true_label) in query:
@@ -215,7 +222,7 @@ def train_classifier(data_dir, reshuffle_data, iters, batch_size, query_method):
         # Evaluate periodic accuracy of our svm model with the rest of our
         # unlabeled data
         acc = evaluate_model(clf, unlabeled_data, src_of_truth)
-        print("\n[RESULTS]: Iteration=" + str(i) + " Model Accuracy:", str(acc) + "%")
+        if verbose: print("\n[TRAIN AL]: Iteration=" + str(i) + " Model Accuracy:", str(acc) + "%")
         accuracies.append(acc)
 
     '''
@@ -224,7 +231,7 @@ def train_classifier(data_dir, reshuffle_data, iters, batch_size, query_method):
     matrix visualization (show the images that we guessed wrong for each
     class.)
     '''
-    return accuracies
+    return (accuracies, clf)
 
 
 if __name__=='__main__':

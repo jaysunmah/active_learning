@@ -10,10 +10,17 @@ import argparse
 import train_al
 
 def run_benchmark(iterations=10,batch_size=10):
-    for query in ["random", "uncertainty", "entropy","ceal"]:
+    clfs = []
+    for query in ["aloss", "random", "uncertainty", "entropy", "ceal"]:
         #TODO: Have train_classifier develop an image result which displays
         # the confusions?
-        acc = train_classifier(join(os.getcwd(), "data"), False, iterations, batch_size, query)
+        iters = 20
+        avg = 0
+        for i in range(iters):
+            (acc,clf) = train_al.train_classifier(join(os.getcwd(), "data"), False, iterations, batch_size, query, False)
+            # clfs.append(clf)
+            avg += acc[-1]
+        print("[BENCHMARK]", query, avg / iters)
         '''
         TODO: append these accuracies with their query method,
         plot them on matplotlib,
