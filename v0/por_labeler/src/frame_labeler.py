@@ -30,6 +30,10 @@ def read_frames(path, output_dir):
                 cv2.imwrite(path, frame)
                 break
             elif ch & 0xFF == ord('1'):
+                path = output_dir + "/neutral/" + filename
+                cv2.imwrite(path, frame)
+                break
+            elif ch & 0xFF == ord('2'):
                 path = output_dir + "/good/" + filename
                 cv2.imwrite(path, frame)
                 break

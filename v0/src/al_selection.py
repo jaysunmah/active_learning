@@ -91,13 +91,13 @@ def aloss_select(clf,unlabeled_data,labels,batch_size):
     # print("Computing disparities, may take a while")
     disparities = aloss.instance_disparities(unlabeled_data)
     # print("Finished computing disparities in", time.time() - now)
-    disparities = disparities / np.max(disparities)
-    for i in range(n):
-        disparities[i][i] = uncertainties[i]
+    # disparities = disparities / np.max(disparities)
+    # for i in range(n):
+        # disparities[i][i] = uncertainties[i]
 
     # this will take the matrix, sum it across its rows, and return the
     # top batch_size samples with the highest sums
-    query_indices = aloss.greedy_solver(disparities, batch_size)
+    query_indices = aloss.greedy_solver(disparities, uncertainties, batch_size)
     # print("Brute force solving...")
     # now = time.time()
     # query_indices = aloss.brute_force_solver(disparities, batch_size)

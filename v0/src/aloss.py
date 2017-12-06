@@ -14,16 +14,26 @@ Revised version, using algorithm given by Uran.
 We will pick our 0th element, and select the element with the highest
 value in that row and go from there.
 '''
-def greedy_solver(M, k):
-    indices = [0]
-    for _ in range(k - 1):
-        # we get the row of the element we just picked
-        row = M[indices[-1]]
-        maxI = np.argmax(row, axis=0)
-        while maxI in indices:
-            row[maxI] = -1
-            maxI = np.argmax(row, axis=0)
-        indices.append(maxI)
+def greedy_solver(disparities, uncertainties, k):
+    for i in range(len(disparities)):
+        disparities[i][i] = 0
+    total_disparities = np.sum(disparities, axis=1)
+
+    #how much we weight uncertainty by
+    weight = 0.95
+    scores = [(i,weight*uncertainties[i]+(1-weight)*total_disparities[i]) for i in range(len(disparities))]
+    sorted_scores = sorted(scores, key = lambda x: x[1], reverse=True)
+    indices = [i for (i, score) in sorted_scores[:k]]
+
+    # indices = [0]
+    # for _ in range(k - 1):
+    #     # we get the row of the element we just picked
+    #     row = M[indices[-1]]
+    #     maxI = np.argmax(row, axis=0)
+    #     while maxI in indices:
+    #         row[maxI] = -1
+    #         maxI = np.argmax(row, axis=0)
+    #     indices.append(maxI)
 
     # sums = np.sum(M, axis=1)
     # zipped_sums = list(enumerate(sums))

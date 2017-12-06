@@ -17,6 +17,7 @@ from os import listdir
 from remove_DS_Store import *
 import random
 import cv2
+import math
 import numpy as np
 
 from sklearn.svm import SVC, LinearSVC
@@ -122,21 +123,48 @@ def create_bottleneck_features(images):
     from keras.applications.vgg16 import preprocess_input
 
     model = VGG16(weights='imagenet', include_top=False)
-    features = []
+    features = np.zeros((len(images), 7 * 7 * 512))
+    # features = np.zeros((len(images), 512))
+    feature_index = 0
     total = len(images)
     curr = 0
-    for (img_path, label) in images:
-        # img = image.load_img(img_path, target_size=(224, 224))
-        img = image.load_img(img_path, target_size=(32, 32))
-        x = image.img_to_array(img)
-        x = np.expand_dims(x, axis=0)
-        x = preprocess_input(x)
-        feature = model.predict(x)
-        features.append(feature[0].ravel())
-        curr += 1
-        print("Progress:", curr / total * 100)
+    img_batch_size = 50
+    # img_batch_size = 500
+    imsize = 224
+    # imsize = 32
+    epochs = math.ceil(len(images) / img_batch_size)
 
+    for epoch in range(epochs):
+        print("Progress:", round(epoch / epochs * 100))
+        begin = epoch * img_batch_size
+        end = min((epoch + 1) * img_batch_size, len(images))
+
+        x_batch = np.zeros((end-begin,imsize,imsize,3))
+        i = 0
+
+        for (img_path, label) in images[begin:end]:
+            img = image.load_img(img_path, target_size=(imsize, imsize))
+            # img = image.load_img(img_path, target_size=(32, 32))
+            x = image.img_to_array(img)
+            x = np.expand_dims(x, axis=0)
+            x = preprocess_input(x)
+
+            x_batch[i] = x[0]
+            i += 1
+
+        batch_features = model.predict(x_batch)
+        # print(batch_features)
+        # print(batch_features.shape)
+
+        for feature in batch_features:
+            features[feature_index] = feature.ravel()
+            feature_index += 1
+            # features.append(feature.ravel())
+            curr += 1
+
+    print("Progress: 100")
     print("Saving image data")
+    # return
     np.save(join(os.getcwd(), "weights/al_features.npy"), np.array(features))
     np.save(join(os.getcwd(), "weights/al_labels.npy"), images)
 
@@ -231,6 +259,11 @@ def train_classifier(data_dir, reshuffle_data, iters, batch_size, query_method, 
     matrix visualization (show the images that we guessed wrong for each
     class.)
     '''
+    if verbose: print("[TRAIN AL]", accuracies)
+
+    with open(join(os.getcwd(), "weights/" + query_method + "-clf.pkl"), 'wb') as fid:
+        cPickle.dump(clf, fid)
+
     return (accuracies, clf)
 
 
