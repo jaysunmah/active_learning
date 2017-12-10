@@ -96,7 +96,6 @@ def evaluate(query_method, input_file, recreate_bottleneck, convert_frames):
     for i in good_pics[:nrows * ncols]:
         img = image.load_img(images[i], target_size=(imsize, imsize))
         x = image.img_to_array(img)
-        # print(x.shape, images[i])
         row = (icon_count//ncols) * (imsize + 2*impadding) + impadding
         col = (icon_count%ncols) * (imsize + 2*impadding) + impadding
 

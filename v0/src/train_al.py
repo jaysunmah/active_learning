@@ -27,6 +27,7 @@ import pickle as cPickle
 
 import aloss
 import al_selection
+import process_image
 
 '''
 data_dir, as always, should be a directory with the minimum structure:
@@ -116,7 +117,7 @@ we take in a massive list of images(shuffled), and we save their feature data
 Future improvement of this should be to display some progress bar, as this
 can take a long time to compute
 '''
-def create_bottleneck_features(images):
+def create_bottleneck_features(images, preprocess_img=False):
 
     from keras.applications.vgg16 import VGG16
     from keras.preprocessing import image
@@ -146,6 +147,9 @@ def create_bottleneck_features(images):
             img = image.load_img(img_path, target_size=(imsize, imsize))
             # img = image.load_img(img_path, target_size=(32, 32))
             x = image.img_to_array(img)
+            if preprocess_img:
+                x = process_image.segment(x)
+
             x = np.expand_dims(x, axis=0)
             x = preprocess_input(x)
 
@@ -168,7 +172,7 @@ def create_bottleneck_features(images):
     np.save(join(os.getcwd(), "weights/al_features.npy"), np.array(features))
     np.save(join(os.getcwd(), "weights/al_labels.npy"), images)
 
-def train_classifier(data_dir, reshuffle_data, iters, batch_size, query_method, verbose=True):
+def train_classifier(data_dir, reshuffle_data, iters, batch_size, query_method, preprocess_image, verbose=True):
     '''
     step 0. initialize our model
     '''
@@ -194,7 +198,7 @@ def train_classifier(data_dir, reshuffle_data, iters, batch_size, query_method, 
     #check if we are missing files OR we want to override them
     if not isfile(join(os.getcwd(), "weights/al_features.npy")) or reshuffle_data:
         if verbose: print("[TRAIN AL] Creating bottleneck features")
-        create_bottleneck_features(images)
+        create_bottleneck_features(images, preprocess_image)
 
     # bottleneck features is array of processed images
     bottleneck_features = np.load(join(os.getcwd(), "weights/al_features.npy"))
@@ -277,8 +281,12 @@ if __name__=='__main__':
         help='How large we want our batch sizes to be')
     parser.add_argument('--query_method', '-q', default='random',
         help='Query Selection')
+    parser.add_argument('--preprocess_image', '-p', default=0, type=int,
+        help='Flag to Preprocess our images. This will only trigger if we want to Reprocess bottleneck features and labels')
+
 
     args = parser.parse_args()
     reshuffle_flag = args.reshuffle_data == 1
+    preprocess_image = args.preprocess_image == 1
 
-    train_classifier(join(os.getcwd(), "data"), reshuffle_flag, args.iterations, args.batch_size, args.query_method)
+    train_classifier(join(os.getcwd(), "data"), reshuffle_flag, args.iterations, args.batch_size, args.query_method, preprocess_image)

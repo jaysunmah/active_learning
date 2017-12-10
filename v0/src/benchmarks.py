@@ -22,7 +22,7 @@ def run_benchmark(iterations=10,batch_size=10):
         avg = 0
         avg_acc = np.zeros(iterations)
         for i in range(iters):
-            (acc,clf) = train_al.train_classifier(join(os.getcwd(), "data"), False, iterations, batch_size, query, False)
+            (acc,clf) = train_al.train_classifier(join(os.getcwd(), "data"), False, iterations, batch_size, query, False, False)
             avg_acc += np.array(acc)
             avg += acc[-1]
         avg_acc /= iters
